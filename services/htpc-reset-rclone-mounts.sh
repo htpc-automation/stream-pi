@@ -125,7 +125,7 @@ bootstrap_env_if_needed() {
   fi
 
   COMPOSE_ENV_FILE="$REPO_ROOT/Compose/.htpc.env"
-  COMPOSE_FILE="$REPO_ROOT/Compose/htpc jellyfin.yaml"
+  COMPOSE_FILE="$REPO_ROOT/Compose/htpc.jellyfin.yaml"
 
   mkdir -p "$(dirname "$COMPOSE_ENV_FILE")"
   cat >"$COMPOSE_ENV_FILE" <<EOF

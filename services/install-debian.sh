@@ -12,6 +12,11 @@ RD_API_KEY=""
 TORBOX_USER=""
 TORBOX_PASS=""
 
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  echo "Please run as root (needed for /etc/htpc and systemd service installation)." >&2
+  exit 1
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --htpc-home)
@@ -33,6 +38,32 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+CONFIG_EXISTS=0
+if [[ -f /etc/htpc/htpc.env ]]; then
+  # shellcheck disable=SC1091
+  . /etc/htpc/htpc.env
+  CONFIG_EXISTS=1
+  echo "Existing /etc/htpc/htpc.env detected."
+  read -r -p "Reuse existing config? [Y/n]: " _ans
+  _ans="${_ans:-Y}"
+  case "${_ans,,}" in
+    y|yes)
+      : # keep CONFIG_EXISTS=1 to reuse
+      ;;
+    n|no)
+      CONFIG_EXISTS=0
+      HTPC_HOME=""
+      REMOTE_MNT=""
+      RD_API_KEY=""
+      TORBOX_USER=""
+      TORBOX_PASS=""
+      ;;
+    *)
+      : # treat anything else as yes
+      ;;
+  esac
+fi
+
 prompt_if_empty() {
   local var_name="$1"
   local prompt="$2"
@@ -49,27 +80,27 @@ prompt_secret_if_empty() {
   fi
 }
 
-default_home="${HTPC_HOME:-${HOME:-/home/$(id -un)}}"
-read -r -p "HTPC_HOME [${default_home}]: " HTPC_HOME
-HTPC_HOME="${HTPC_HOME:-$default_home}"
+if [[ $CONFIG_EXISTS -eq 0 ]]; then
+  default_home="${HTPC_HOME:-${HOME:-/home/$(id -un)}}"
+  read -r -p "HTPC_HOME [${default_home}]: " HTPC_HOME
+  HTPC_HOME="${HTPC_HOME:-$default_home}"
 
-default_remote_mnt="${REMOTE_MNT:-/mnt/remote}"
-read -r -p "REMOTE_MNT [${default_remote_mnt}]: " REMOTE_MNT
-REMOTE_MNT="${REMOTE_MNT:-$default_remote_mnt}"
-prompt_secret_if_empty RD_API_KEY "RealDebrid API key: "
-prompt_if_empty TORBOX_USER "Torbox WebDAV user (email): "
-prompt_secret_if_empty TORBOX_PASS "Torbox WebDAV password: "
+  default_remote_mnt="${REMOTE_MNT:-/mnt/remote}"
+  read -r -p "REMOTE_MNT [${default_remote_mnt}]: " REMOTE_MNT
+  REMOTE_MNT="${REMOTE_MNT:-$default_remote_mnt}"
 
-if [[ -z "$HTPC_HOME" || -z "$REMOTE_MNT" || -z "$RD_API_KEY" || -z "$TORBOX_USER" || -z "$TORBOX_PASS" ]]; then
-  echo "Missing required inputs" >&2
-  exit 1
-fi
+  prompt_secret_if_empty RD_API_KEY "RealDebrid API key: "
+  prompt_if_empty TORBOX_USER "Torbox WebDAV user (email): "
+  prompt_secret_if_empty TORBOX_PASS "Torbox WebDAV password: "
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  if [[ -z "$HTPC_HOME" || -z "$REMOTE_MNT" || -z "$RD_API_KEY" || -z "$TORBOX_USER" || -z "$TORBOX_PASS" ]]; then
+    echo "Missing required inputs" >&2
+    exit 1
+  fi
 
-if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-  echo "Please run as root (needed for /etc/htpc and systemd service installation)." >&2
-  exit 1
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+elif [[ -z "${REPO_ROOT:-}" ]]; then
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
 require_cmd() {
@@ -87,7 +118,8 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$HTPC_HOME" "$REMOTE_MNT" \
+if [[ $CONFIG_EXISTS -eq 0 ]]; then
+  mkdir -p "$HTPC_HOME" "$REMOTE_MNT" \
   "$HTPC_HOME/rclone" \
   "$HTPC_HOME/.cache/rclone/torbox" \
   "$HTPC_HOME/zurg" \
@@ -95,29 +127,29 @@ mkdir -p "$HTPC_HOME" "$REMOTE_MNT" \
   "$REMOTE_MNT/realdebrid" \
   "$REMOTE_MNT/torbox"
 
-cat >"$REPO_ROOT/docker/.htpc.env" <<EOF
+  cat >"$REPO_ROOT/docker/.htpc.env" <<EOF
 HTPC_HOME=$HTPC_HOME
 REMOTE_MNT=$REMOTE_MNT
 EOF
 
-mkdir -p /etc/htpc
-cat >/etc/htpc/htpc.env <<EOF
+  mkdir -p /etc/htpc
+  cat >/etc/htpc/htpc.env <<EOF
 HTPC_HOME=$HTPC_HOME
 REMOTE_MNT=$REMOTE_MNT
 REPO_ROOT=$REPO_ROOT
 COMPOSE_ENV_FILE=$REPO_ROOT/docker/.htpc.env
 COMPOSE_FILE=$REPO_ROOT/docker/htpc.jellyfin.yaml
 EOF
-chmod 0600 /etc/htpc/htpc.env
+  chmod 0600 /etc/htpc/htpc.env
 
-TORBOX_PASS_OBSCURED=""
-if command -v rclone >/dev/null 2>&1; then
-  TORBOX_PASS_OBSCURED="$(rclone obscure "$TORBOX_PASS")"
-else
-  TORBOX_PASS_OBSCURED="$(docker run --rm ghcr.io/rclone/rclone:latest obscure "$TORBOX_PASS")"
-fi
+  TORBOX_PASS_OBSCURED=""
+  if command -v rclone >/dev/null 2>&1; then
+    TORBOX_PASS_OBSCURED="$(rclone obscure "$TORBOX_PASS")"
+  else
+    TORBOX_PASS_OBSCURED="$(docker run --rm ghcr.io/rclone/rclone:latest obscure "$TORBOX_PASS")"
+  fi
 
-cat >"$HTPC_HOME/rclone/rclone.conf" <<EOF
+  cat >"$HTPC_HOME/rclone/rclone.conf" <<EOF
 [zurghttp]
 type = webdav
 url = http://zurg:9999/dav
@@ -132,15 +164,16 @@ user = $TORBOX_USER
 pass = $TORBOX_PASS_OBSCURED
 EOF
 
-if [[ -f "$REPO_ROOT/config/zurg.yaml" ]]; then
-  sed "s/^token:.*$/token: $RD_API_KEY/" "$REPO_ROOT/config/zurg.yaml" >"$HTPC_HOME/zurg/config.yaml"
-else
-  cat >"$HTPC_HOME/zurg/config.yaml" <<EOF
+  if [[ -f "$REPO_ROOT/config/zurg.yaml" ]]; then
+    sed "s/^token:.*$/token: $RD_API_KEY/" "$REPO_ROOT/config/zurg.yaml" >"$HTPC_HOME/zurg/config.yaml"
+  else
+    cat >"$HTPC_HOME/zurg/config.yaml" <<EOF
 zurg: v1
 token: $RD_API_KEY
 host: "[::]"
 port: 9999
 EOF
+  fi
 fi
 
 install -m 0755 "$REPO_ROOT/services/htpc-reset-rclone-mounts.sh" /usr/local/bin/htpc-reset-rclone-mounts
@@ -152,7 +185,7 @@ systemctl daemon-reload
 systemctl enable htpc-reset-rclone-mounts.service
 
 echo "Bringing up stack..."
-docker compose --env-file "$REPO_ROOT/docker/.htpc.env" -f "$REPO_ROOT/docker/htpc jellyfin.yaml" up -d
+docker compose --env-file "$REPO_ROOT/docker/.htpc.env" -f "$REPO_ROOT/docker/htpc.jellyfin.yaml" up -d
 
 echo "Running mount reset once..."
 /usr/local/bin/htpc-reset-rclone-mounts
