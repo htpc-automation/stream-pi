@@ -50,7 +50,10 @@ prompt_secret_if_empty() {
   fi
 }
 
-prompt_if_empty HTPC_HOME "HTPC_HOME (e.g. /home/orangepi): "
+default_home="${HTPC_HOME:-${HOME:-/home/$(id -un)}}"
+read -r -p "HTPC_HOME [${default_home}]: " HTPC_HOME
+HTPC_HOME="${HTPC_HOME:-$default_home}"
+
 prompt_if_empty REMOTE_MNT "REMOTE_MNT (e.g. /mnt/remote): "
 prompt_secret_if_empty RD_API_KEY "RealDebrid API key: "
 prompt_if_empty TORBOX_USER "Torbox WebDAV user (email): "

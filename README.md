@@ -41,7 +41,11 @@ Run this on your Linux box as root. It will download the repo ZIP, extract it, a
 bash -lc 'set -euo pipefail
 tmp="$(mktemp -d)"
 trap "rm -rf \"$tmp\"" EXIT
-curl -fsSL "https://github.com/htpc-automation/stream-pi/archive/refs/heads/main.zip" -o "$tmp/stream-pi.zip"
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL "https://github.com/htpc-automation/stream-pi/archive/refs/heads/main.zip" -o "$tmp/stream-pi.zip"
+else
+  wget -qO "$tmp/stream-pi.zip" "https://github.com/htpc-automation/stream-pi/archive/refs/heads/main.zip"
+fi
 unzip -q "$tmp/stream-pi.zip" -d "$tmp"
 repo_dir="$tmp/stream-pi-main"
 chmod +x "$repo_dir/services/install-debian.sh"
