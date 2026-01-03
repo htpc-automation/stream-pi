@@ -45,8 +45,7 @@ prompt_secret_if_empty() {
   local var_name="$1"
   local prompt="$2"
   if [[ -z "${!var_name}" ]]; then
-    read -r -s -p "$prompt" "$var_name"
-    echo
+    read -r -p "$prompt" "$var_name"
   fi
 }
 
