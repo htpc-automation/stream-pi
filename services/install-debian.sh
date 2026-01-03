@@ -106,7 +106,7 @@ HTPC_HOME=$HTPC_HOME
 REMOTE_MNT=$REMOTE_MNT
 REPO_ROOT=$REPO_ROOT
 COMPOSE_ENV_FILE=$REPO_ROOT/docker/.htpc.env
-COMPOSE_FILE=$REPO_ROOT/docker/htpc jellyfin.yaml
+COMPOSE_FILE=$REPO_ROOT/docker/htpc.jellyfin.yaml
 EOF
 chmod 0600 /etc/htpc/htpc.env
 
